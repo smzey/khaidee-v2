@@ -1,0 +1,42 @@
+{
+  "name": "khaidee",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "dev:api": "npm run dev --workspace @khaidee/api",
+    "db:push": "npm run db:push --workspace @khaidee/api",
+    "db:seed": "npm run db:seed --workspace @khaidee/api",
+    "dev:order": "npm run dev --workspace @khaidee/order",
+    "qr": "node scripts/lan.mjs both",
+    "qr:order": "node scripts/lan.mjs order",
+    "qr:vendor": "node scripts/lan.mjs vendor",
+    "dev:vendor": "npm run start --workspace @khaidee/vendor -- --lan",
+    "dev:vendor:web": "npm run web --workspace @khaidee/vendor",
+    "report": "node scripts/report.mjs",
+    "tier": "node scripts/tier.mjs",
+    "seed:demo": "node scripts/seed-demo.mjs"
+  },
+  "devDependencies": {
+    "expo-modules-core": "~3.0.30",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-native": "0.81.5",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.10"
+  },
+  "overrides": {
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-native": "0.81.5"
+  }
+}

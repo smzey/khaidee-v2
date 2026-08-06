@@ -1,0 +1,1005 @@
+@import '@fontsource/archivo-black/400.css';
+@import '@fontsource/ibm-plex-sans-thai/400.css';
+@import '@fontsource/ibm-plex-sans-thai/500.css';
+@import '@fontsource/ibm-plex-sans-thai/600.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+@import '@fontsource/ibm-plex-mono/600.css';
+
+/*
+ * Read outdoors, in the sun, one-handed, by someone who is also holding a bag.
+ * That rules the whole sheet: high luminance background, near-black ink, no
+ * mid-grey text anywhere, and nothing tappable under 48px.
+ *
+ * The palette comes from the stall itself rather than from a design system —
+ * the blue of the plastic stool, the red of a chilli, the yolk-orange of the
+ * bulb strung over the cart.
+ */
+:root {
+  --paper: #fbfaf7;
+  --ink: #16181c;
+  --stool: #1b4fd8;
+  --chilli: #d6202b;
+  --yolk: #f5a524;
+  --rule: #d9d5cc;
+  --muted: #55585f;
+
+  --display: 'Archivo Black', system-ui, sans-serif;
+  --body: 'IBM Plex Sans Thai', system-ui, sans-serif;
+  --figure: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --edge: 12px;
+  --bar-height: 92px;
+
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+
+body {
+  min-height: 100dvh;
+}
+
+#root {
+  max-width: 560px;
+  margin: 0 auto;
+  min-height: 100dvh;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 3px solid var(--stool);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ── the stall head ──────────────────────────────────────────────────── */
+
+.stall {
+  padding: 20px var(--edge) calc(var(--bar-height) + 40px);
+}
+
+.stall__head {
+  padding: 8px 0 4px;
+}
+
+.stall__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--figure);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.stall__status::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--stool);
+}
+
+.stall__status[data-shut]::before {
+  background: var(--muted);
+}
+
+.stall__name {
+  font-family: var(--display);
+  font-size: clamp(28px, 8vw, 38px);
+  line-height: 0.98;
+  letter-spacing: -0.015em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.stall__shut {
+  margin: 16px 0 0;
+  padding: 14px 16px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+/* ── category chips ──────────────────────────────────────────────────── */
+
+.chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 16px var(--edge) 14px;
+  margin: 0 calc(var(--edge) * -1) 4px;
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+}
+
+.chips::-webkit-scrollbar {
+  display: none;
+}
+
+.chip {
+  flex: none;
+  border: 1px solid var(--ink);
+  background: transparent;
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 500;
+  white-space: nowrap;
+  min-height: 44px;
+}
+
+.chip[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* ── the dish grid ───────────────────────────────────────────────────── */
+
+.group__title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 26px 0 12px;
+  font-family: var(--figure);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.group__title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--rule);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  border: 1px solid var(--rule);
+  background: var(--paper);
+  padding: 0;
+  overflow: hidden;
+  border-radius: 3px;
+  position: relative;
+}
+
+.tile[data-out] {
+  opacity: 0.55;
+}
+
+.tile__art {
+  aspect-ratio: 1;
+  width: 100%;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-bottom: 1px solid var(--rule);
+}
+
+.tile__art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/*
+ * With no photograph, a tinted square with an empty plate drawn on it.
+ *
+ * It carried the dish's Thai name first, which the tile printed again two
+ * lines below — the same words twice. A two-cluster initial fixed that but
+ * collided constantly (ส้มตำไทย and ส้มตำปูปลาร้า both reduce to ส้ม), so
+ * adjacent tiles read as a rendering fault. The plate says "a photo belongs
+ * here" and leaves the naming to the label, which does it properly.
+ */
+.tile__placeholder {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  background: var(--tint, #efece5);
+}
+
+.tile__placeholder::after {
+  content: '';
+  width: 38%;
+  aspect-ratio: 1;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  opacity: 0.22;
+}
+
+.tile__body {
+  padding: 10px 11px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.tile__th {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.tile__en {
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--muted);
+  margin: 0;
+}
+
+.tile__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.tile__price {
+  font-family: var(--figure);
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.tile__more {
+  font-family: var(--figure);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.tile__out {
+  font-family: var(--figure);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--chilli);
+}
+
+.tile__badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--stool);
+  color: #fff;
+  font-family: var(--figure);
+  font-size: 15px;
+  font-weight: 600;
+  display: grid;
+  place-items: center;
+}
+
+.add {
+  width: 44px;
+  height: 44px;
+  border: 2px solid var(--ink);
+  background: transparent;
+  border-radius: 50%;
+  font-size: 24px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  flex: none;
+}
+
+/* ── the cart bar: the top edge of the ticket, peeking up ────────────── */
+
+.bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-width: 560px;
+  margin: 0 auto;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 18px var(--edge) calc(18px + env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 14px;
+  animation: rise 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  z-index: 6;
+}
+
+@keyframes rise {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+.bar__count {
+  font-family: var(--figure);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+.bar__total {
+  font-family: var(--figure);
+  font-size: 26px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.bar__go {
+  border: 0;
+  background: var(--stool);
+  color: #fff;
+  font-weight: 600;
+  font-size: 16px;
+  padding: 16px 22px;
+  border-radius: 2px;
+  min-height: 56px;
+}
+
+/* ── sheets: options, and the ticket ─────────────────────────────────── */
+
+.sheet {
+  position: fixed;
+  inset: 0;
+  background: rgba(22, 24, 28, 0.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 12px;
+  z-index: 10;
+}
+
+.ticket {
+  background: var(--paper);
+  width: 100%;
+  max-width: 528px;
+  padding: 24px 20px calc(20px + env(safe-area-inset-bottom));
+  animation: rise 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  max-height: 90dvh;
+  overflow-y: auto;
+  border-radius: 3px;
+}
+
+.ticket__stall {
+  font-family: var(--display);
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin: 0 0 16px;
+}
+
+.perf {
+  height: 8px;
+  margin: 16px -20px;
+  background-image: radial-gradient(
+    circle at 7px 0,
+    transparent 7px,
+    var(--rule) 7.5px,
+    transparent 8.5px
+  );
+  background-size: 14px 8px;
+  background-repeat: repeat-x;
+}
+
+/* ── choosing options ────────────────────────────────────────────────── */
+
+.opt__head {
+  margin: 0 0 2px;
+}
+
+.opt__th {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.opt__en {
+  font-size: 14px;
+  color: var(--muted);
+  margin: 2px 0 0;
+}
+
+.opt__group {
+  margin-top: 20px;
+}
+
+.opt__label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.opt__name {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* The rule is stated, not implied — "Choose one" beside the group heading. */
+.opt__rule {
+  font-family: var(--figure);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.opt__rule[data-required] {
+  color: var(--chilli);
+}
+
+.opt__choice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  border: 1px solid var(--rule);
+  background: transparent;
+  padding: 13px 14px;
+  margin-bottom: 8px;
+  border-radius: 2px;
+  text-align: left;
+  min-height: 52px;
+}
+
+.opt__choice[aria-checked='true'] {
+  border-color: var(--ink);
+  background: #fff;
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.opt__choice[disabled] {
+  opacity: 0.45;
+}
+
+/* Round marks a single choice, square marks one of many — the shape carries
+   the rule even before the label is read. */
+.opt__mark {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--ink);
+  flex: none;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.opt__mark[data-shape='one'] {
+  border-radius: 50%;
+}
+
+.opt__choice[aria-checked='true'] .opt__mark {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.opt__text {
+  flex: 1;
+  font-size: 16px;
+}
+
+.opt__sub {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.opt__delta {
+  font-family: var(--figure);
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The Add button must never be below the fold. A dish with four groups makes
+ * the sheet scroll, and the primary action scrolling away is how a customer
+ * decides the app is broken.
+ */
+.opt__actions {
+  position: sticky;
+  bottom: calc(env(safe-area-inset-bottom) * -1);
+  background: var(--paper);
+  margin: 0 -20px;
+  padding: 4px 20px calc(4px + env(safe-area-inset-bottom));
+  box-shadow: 0 -14px 18px -6px var(--paper);
+}
+
+.opt__qty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--ink);
+  border-radius: 999px;
+  padding: 4px;
+}
+
+.stepper button {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--paper);
+  font-size: 22px;
+  line-height: 1;
+  border-radius: 50%;
+  padding: 0;
+}
+
+.stepper__qty {
+  font-family: var(--figure);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--paper);
+  min-width: 26px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── ticket lines ────────────────────────────────────────────────────── */
+
+.line {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: baseline;
+  padding: 9px 0;
+  font-size: 15px;
+}
+
+.line__qty {
+  font-family: var(--figure);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.line__name {
+  min-width: 0;
+}
+
+.line__amount {
+  font-family: var(--figure);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.line__options {
+  grid-column: 2 / -1;
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 6px 0 2px;
+}
+
+.ticket-line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 0;
+}
+
+.ticket-line + .ticket-line {
+  border-top: 1px solid color-mix(in srgb, var(--rule) 70%, transparent);
+}
+
+.ticket-line__qty {
+  min-width: 48px;
+  height: 48px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--paper);
+  display: grid;
+  place-items: center;
+  font-family: var(--figure);
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ticket-line__copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.ticket-line__name {
+  overflow-wrap: anywhere;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.ticket-line__options {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.ticket-line__side {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.ticket-line__amount {
+  font-family: var(--figure);
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ticket-line__remove {
+  min-width: 32px;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--figure);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0;
+  text-align: center;
+}
+
+.ticket-line__remove:active {
+  color: var(--ink);
+}
+
+.ticket-line__remove[disabled] {
+  opacity: 0.4;
+}
+
+.total__label {
+  font-family: var(--figure);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.total__amount {
+  font-family: var(--figure);
+  font-size: 30px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.note {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+  margin: 14px 0 0;
+}
+
+.btn {
+  display: block;
+  width: 100%;
+  border: 0;
+  padding: 18px;
+  font-size: 17px;
+  font-weight: 600;
+  border-radius: 2px;
+  min-height: 58px;
+  margin-top: 12px;
+  text-align: center;
+  text-decoration: none;
+}
+
+.btn--go {
+  background: var(--stool);
+  color: #fff;
+}
+
+.btn--quiet {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--rule);
+}
+
+.btn--danger {
+  background: transparent;
+  color: var(--chilli);
+  border: 1px solid currentColor;
+}
+
+.btn[disabled] {
+  opacity: 0.45;
+}
+
+/* ── the stub: what you hold while you wait ──────────────────────────── */
+
+.stub {
+  min-height: 100dvh;
+  padding: 22px var(--edge) 30px;
+  display: flex;
+  flex-direction: column;
+  transition: background 260ms ease, color 260ms ease;
+}
+
+/*
+ * Ready flips the whole screen to chilli. A vendor calling "fourteen" across
+ * a market needs the customer to notice from the other side of it, and a
+ * small green badge does not carry that far.
+ */
+.stub[data-status='ready'] {
+  background: var(--chilli);
+  color: #fff;
+}
+
+.stub[data-status='cancelled'],
+.stub[data-status='completed'] {
+  color: var(--muted);
+}
+
+.stub__stall {
+  font-family: var(--display);
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.stub__label {
+  font-family: var(--figure);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin: 26px 0 0;
+  opacity: 0.7;
+}
+
+/*
+ * The number is the handoff. The vendor shouts it; this is the only thing
+ * linking a phone to a person standing at a stall. Everything else on this
+ * screen is smaller than it by a wide margin, deliberately.
+ */
+.stub__number {
+  font-family: var(--display);
+  font-size: clamp(96px, 42vw, 200px);
+  line-height: 0.82;
+  letter-spacing: -0.03em;
+  margin: 4px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.stub__state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 20px;
+  font-weight: 600;
+  margin-top: 18px;
+}
+
+.stub__dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.stub[data-status='placed'] .stub__dot,
+.stub[data-status='accepted'] .stub__dot {
+  background: var(--yolk);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.stub__perf {
+  height: 8px;
+  margin: 26px calc(var(--edge) * -1);
+  background-image: radial-gradient(
+    circle at 7px 0,
+    transparent 7px,
+    currentColor 7.5px,
+    transparent 8.5px
+  );
+  background-size: 14px 8px;
+  background-repeat: repeat-x;
+  opacity: 0.28;
+}
+
+.pay {
+  margin-top: 22px;
+  padding-top: 22px;
+  border-top: 1px solid var(--rule);
+  text-align: center;
+}
+
+.stub[data-status='ready'] .pay {
+  border-top-color: rgba(255, 255, 255, 0.35);
+}
+
+.pay__qr {
+  width: min(232px, 62vw);
+  height: auto;
+  image-rendering: pixelated;
+  background: #fff;
+  padding: 12px;
+  display: block;
+  margin: 0 auto 12px;
+}
+
+.pay__title {
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  margin: 0 0 10px;
+  text-transform: uppercase;
+}
+
+.pay__how {
+  font-size: 15px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.pay__cash {
+  font-size: 14px;
+  color: var(--muted);
+  margin: 8px 0 0;
+}
+
+.stub[data-status='ready'] .pay__cash {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.stub__spacer {
+  flex: 1;
+  min-height: 22px;
+}
+
+/* ── the watermark ───────────────────────────────────────────────────── */
+
+/*
+ * The stall's name is the loud one on every screen; this is a maker's mark,
+ * not a logo. Set at the size of a printer's imprint on the back of a ticket.
+ */
+.mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin-top: 34px;
+  padding-top: 18px;
+  font-family: var(--figure);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.mark::before,
+.mark::after {
+  content: '';
+  width: 14px;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.5;
+}
+
+.stub .mark {
+  margin-top: 26px;
+  color: inherit;
+  opacity: 0.55;
+}
+
+/* ── plain states ────────────────────────────────────────────────────── */
+
+.plain {
+  padding: 64px var(--edge);
+  text-align: center;
+}
+
+.plain__title {
+  font-family: var(--display);
+  font-size: 24px;
+  text-transform: uppercase;
+  margin: 0 0 10px;
+}
+
+.plain__body {
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--muted);
+  margin: 0;
+}
+
+.error {
+  margin: 14px 0 0;
+  padding: 14px 16px;
+  background: var(--chilli);
+  color: #fff;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before {
+    animation: none !important;
+    transition: none !important;
+  }
+}
