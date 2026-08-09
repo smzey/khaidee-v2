@@ -136,149 +136,145 @@ export function LaunchPadScreen({
       <Text style={styles.section}>Modules</Text>
 
       <View style={styles.modules}>
-        <Pressable style={styles.tile} onPress={onOpenOrders} testID="module-orders">
-          <View style={styles.tileTop}>
-            <View style={styles.iconBox}>
-              <Text style={styles.iconText}>#</Text>
-            </View>
-            <View style={styles.badge}>
-              {loading ? (
-                <ActivityIndicator color={theme.white} size="small" />
-              ) : (
-                <Text style={styles.badgeText}>{openOrders.length}</Text>
-              )}
-            </View>
-          </View>
-          <Text style={styles.tileTitle}>Orders</Text>
-          <Text style={styles.tileBody}>
-            Live queue, accept orders, mark food ready, and complete pickup.
-          </Text>
-          <Text style={styles.tileAction}>Open orders</Text>
-        </Pressable>
-
-        <Pressable style={styles.tile} onPress={onOpenMenu} testID="module-menu">
-          <View style={styles.tileTop}>
-            <View style={[styles.iconBox, { backgroundColor: theme.chilli }]}>
-              <Text style={styles.iconText}>M</Text>
-            </View>
-            <View style={[styles.badge, { backgroundColor: theme.white, borderWidth: 1, borderColor: theme.ink }]}>
-              <Text style={[styles.badgeText, { color: theme.ink }]}>MENU</Text>
-            </View>
-          </View>
-          <Text style={styles.tileTitle}>Menu</Text>
-          <Text style={styles.tileBody}>
-            Add categories, create dishes, set prices, and mark sold out items.
-          </Text>
-          <Text style={styles.tileAction}>Open menu</Text>
-        </Pressable>
-
-        <Pressable style={styles.tile} onPress={onOpenHistory} testID="module-history">
-          <View style={styles.tileTop}>
-            <View style={[styles.iconBox, { backgroundColor: theme.yolk }]}>
-              <Text style={[styles.iconText, { color: theme.ink }]}>H</Text>
-            </View>
-            <View style={[styles.badge, { backgroundColor: theme.white, borderWidth: 1, borderColor: theme.ink }]}>
-              <Text style={[styles.badgeText, { color: theme.ink }]}>{historyCount}</Text>
-            </View>
-          </View>
-          <Text style={styles.tileTitle}>History</Text>
-          <Text style={styles.tileBody}>
-            Done and cancelled orders from today, with totals and payment method.
-          </Text>
-          <Text style={styles.tileAction}>Open history</Text>
-        </Pressable>
-
-        <Pressable
-          style={styles.tile}
+        <ModuleShortcut
+          label="Orders"
+          icon="#"
+          accent={theme.stool}
+          badge={loading ? null : String(openOrders.length)}
+          loading={loading}
+          onPress={onOpenOrders}
+          testID="module-orders"
+        />
+        <ModuleShortcut
+          label="Menu"
+          icon="M"
+          accent={theme.chilli}
+          onPress={onOpenMenu}
+          testID="module-menu"
+        />
+        <ModuleShortcut
+          label="History"
+          icon="H"
+          accent={theme.yolk}
+          darkIcon
+          badge={String(historyCount)}
+          badgeTone="plain"
+          onPress={onOpenHistory}
+          testID="module-history"
+        />
+        <ModuleShortcut
+          label="Prep"
+          icon="F"
+          accent={theme.ink}
+          badge={String(forecastOrders)}
+          badgeTone="warm"
           onPress={onOpenForecasting}
           testID="module-forecasting"
-        >
-          <View style={styles.tileTop}>
-            <View style={[styles.iconBox, { backgroundColor: theme.ink }]}>
-              <Text style={styles.iconText}>F</Text>
-            </View>
-            <View style={[styles.badge, { backgroundColor: theme.yolk }]}>
-              <Text style={[styles.badgeText, { color: theme.ink }]}>
-                {forecastOrders}
-              </Text>
-            </View>
-          </View>
-          <Text style={styles.tileTitle}>Forecasting</Text>
-          <Text style={styles.tileBody}>
-            Tomorrow prep from sales history, recipes, and weather.
-          </Text>
-          <Text style={styles.tileAction}>Open forecast</Text>
-        </Pressable>
-
-        <Pressable style={styles.tile} onPress={onOpenReport} testID="module-report">
-          <View style={styles.tileTop}>
-            <View style={[styles.iconBox, { backgroundColor: theme.stool }]}>
-              <Text style={styles.iconText}>R</Text>
-            </View>
-            <View style={[styles.badge, { backgroundColor: theme.white, borderWidth: 1, borderColor: theme.ink }]}>
-              <Text style={[styles.badgeText, { color: theme.ink }]}>{completed}</Text>
-            </View>
-          </View>
-          <Text style={styles.tileTitle}>Report</Text>
-          <Text style={styles.tileBody}>
-            Today sales, top dishes, payment split, service times, and written note.
-          </Text>
-          <Text style={styles.tileAction}>Open report</Text>
-        </Pressable>
-
-        <Pressable style={styles.tile} onPress={onOpenStall} testID="module-stall">
-          <View style={styles.tileTop}>
-            <View style={[styles.iconBox, { backgroundColor: theme.stool }]}>
-              <Text style={styles.iconText}>S</Text>
-            </View>
-            <View style={[styles.badge, session.stall.isOpen ? styles.badgeOpen : styles.badgeClosed]}>
-              <Text style={styles.badgeText}>{session.stall.isOpen ? 'ON' : 'OFF'}</Text>
-            </View>
-          </View>
-          <Text style={styles.tileTitle}>Stall</Text>
-          <Text style={styles.tileBody}>
-            Customer ordering, QR identity, and counter setup.
-          </Text>
-          <Text style={styles.tileAction}>Open stall</Text>
-        </Pressable>
-
-        <Pressable style={styles.tile} onPress={onOpenPlans} testID="module-plans">
-          <View style={styles.tileTop}>
-            <View style={[styles.iconBox, { backgroundColor: theme.yolk }]}>
-              <Text style={[styles.iconText, { color: theme.ink }]}>฿</Text>
-            </View>
-            <View style={[styles.badge, { backgroundColor: theme.ink }]}>
-              <Text style={styles.badgeText}>
-                {PLANS[session.stall.tier].nameEn.toUpperCase()}
-              </Text>
-            </View>
-          </View>
-          <Text style={styles.tileTitle}>Plan</Text>
-          <Text style={styles.tileBody}>
-            {session.stall.tier === 'premium'
-              ? 'You are on the top plan. Here is what it covers.'
-              : 'Core modules are free. See optional growth and expert add-ons.'}
-          </Text>
-          <Text style={styles.tileAction}>See plans</Text>
-        </Pressable>
-
-        <Pressable style={styles.tile} onPress={onOpenQr} testID="module-qr">
-          <View style={styles.tileTop}>
-            <View style={[styles.iconBox, { backgroundColor: theme.ink }]}>
-              <Text style={styles.iconText}>QR</Text>
-            </View>
-            <View style={[styles.badge, { backgroundColor: theme.yolk }]}>
-              <Text style={[styles.badgeText, { color: theme.ink }]}>SCAN</Text>
-            </View>
-          </View>
-          <Text style={styles.tileTitle}>QR Code</Text>
-          <Text style={styles.tileBody}>
-            Show the customer ordering code for this stall.
-          </Text>
-          <Text style={styles.tileAction}>Open QR</Text>
-        </Pressable>
+        />
+        <ModuleShortcut
+          label="Report"
+          icon="R"
+          accent={theme.stool}
+          badge={String(completed)}
+          badgeTone="plain"
+          onPress={onOpenReport}
+          testID="module-report"
+        />
+        <ModuleShortcut
+          label="Stall"
+          icon="S"
+          accent={theme.stool}
+          badge={session.stall.isOpen ? 'ON' : 'OFF'}
+          badgeTone={session.stall.isOpen ? 'blue' : 'muted'}
+          onPress={onOpenStall}
+          testID="module-stall"
+        />
+        <ModuleShortcut
+          label="Plan"
+          icon="฿"
+          accent={theme.yolk}
+          darkIcon
+          badge={PLANS[session.stall.tier].nameEn.toUpperCase()}
+          badgeTone="dark"
+          onPress={onOpenPlans}
+          testID="module-plans"
+        />
+        <ModuleShortcut
+          label="QR"
+          icon="QR"
+          accent={theme.ink}
+          badge="SCAN"
+          badgeTone="warm"
+          onPress={onOpenQr}
+          testID="module-qr"
+        />
       </View>
     </ScrollView>
+  );
+}
+
+function ModuleShortcut({
+  label,
+  icon,
+  accent,
+  darkIcon = false,
+  badge,
+  badgeTone = 'blue',
+  loading = false,
+  onPress,
+  testID,
+}: {
+  label: string;
+  icon: string;
+  accent: string;
+  darkIcon?: boolean;
+  badge?: string | null;
+  badgeTone?: 'blue' | 'dark' | 'warm' | 'plain' | 'muted';
+  loading?: boolean;
+  onPress: () => void;
+  testID: string;
+}) {
+  const badgeStyle =
+    badgeTone === 'dark'
+      ? styles.shortcutBadgeDark
+      : badgeTone === 'warm'
+        ? styles.shortcutBadgeWarm
+        : badgeTone === 'plain'
+          ? styles.shortcutBadgePlain
+          : badgeTone === 'muted'
+            ? styles.shortcutBadgeMuted
+            : styles.shortcutBadgeBlue;
+  const badgeTextStyle =
+    badgeTone === 'plain' || badgeTone === 'warm'
+      ? styles.shortcutBadgeTextDark
+      : styles.shortcutBadgeTextLight;
+
+  return (
+    <Pressable style={styles.shortcut} onPress={onPress} testID={testID}>
+      <View style={[styles.shortcutIcon, { backgroundColor: accent }]}>
+        <Text
+          style={[styles.shortcutIconText, darkIcon && styles.shortcutIconTextDark]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+        >
+          {icon}
+        </Text>
+        {(loading || badge) && (
+          <View style={[styles.shortcutBadge, badgeStyle]}>
+            {loading ? (
+              <ActivityIndicator color={theme.white} size="small" />
+            ) : (
+              <Text style={[styles.shortcutBadgeText, badgeTextStyle]} numberOfLines={1}>
+                {badge}
+              </Text>
+            )}
+          </View>
+        )}
+      </View>
+      <Text style={styles.shortcutLabel} numberOfLines={2}>
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -382,43 +378,68 @@ const styles = StyleSheet.create({
     letterSpacing: 1.1,
     marginBottom: 10,
   },
-  tile: {
-    backgroundColor: theme.white,
+  modules: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -8,
+    rowGap: 22,
+  },
+  shortcut: {
+    width: '25%',
+    minHeight: 116,
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  shortcutIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: theme.ink,
-    borderRadius: 3,
-    padding: 16,
-    minHeight: 190,
+    marginBottom: 8,
   },
-  modules: { gap: 12 },
-  tileTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 24,
+  shortcutIconText: {
+    color: theme.white,
+    fontSize: 27,
+    lineHeight: 31,
+    fontWeight: '900',
   },
-  iconBox: {
-    width: 52,
-    height: 52,
-    borderRadius: 3,
-    backgroundColor: theme.ink,
+  shortcutIconTextDark: { color: theme.ink },
+  shortcutLabel: {
+    minHeight: 36,
+    color: theme.ink,
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  shortcutBadge: {
+    position: 'absolute',
+    right: -8,
+    top: -8,
+    minWidth: 28,
+    height: 28,
+    maxWidth: 62,
+    paddingHorizontal: 7,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: theme.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconText: { color: theme.white, fontSize: 26, fontWeight: '800' },
-  badge: {
-    minWidth: 40,
-    height: 34,
-    paddingHorizontal: 10,
-    borderRadius: 17,
-    backgroundColor: theme.stool,
-    alignItems: 'center',
-    justifyContent: 'center',
+  shortcutBadgeBlue: { backgroundColor: theme.stool },
+  shortcutBadgeDark: { backgroundColor: theme.ink },
+  shortcutBadgeWarm: { backgroundColor: theme.yolk },
+  shortcutBadgePlain: { backgroundColor: theme.white },
+  shortcutBadgeMuted: { backgroundColor: theme.muted },
+  shortcutBadgeText: {
+    fontSize: 10,
+    lineHeight: 12,
+    fontWeight: '900',
+    textAlign: 'center',
   },
-  badgeText: { color: theme.white, fontWeight: '800', fontSize: 17 },
-  badgeOpen: { backgroundColor: theme.stool },
-  badgeClosed: { backgroundColor: theme.muted },
-  tileTitle: { fontSize: 25, fontWeight: '800', color: theme.ink, marginBottom: 6 },
-  tileBody: { fontSize: 15, color: theme.muted, lineHeight: 21, marginBottom: 18 },
-  tileAction: { fontSize: 15, color: theme.stool, fontWeight: '800' },
+  shortcutBadgeTextLight: { color: theme.white },
+  shortcutBadgeTextDark: { color: theme.ink },
 });

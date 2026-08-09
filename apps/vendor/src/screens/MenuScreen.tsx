@@ -281,7 +281,21 @@ export function MenuScreen({
   };
 
   const saveItem = async () => {
-    if (!itemReady) return;
+    if (itemName.trim().length === 0) {
+      setNotice(null);
+      setError('Add a dish name first.');
+      return;
+    }
+    if (itemPrice.trim().length === 0) {
+      setNotice(null);
+      setError('Add a price first.');
+      return;
+    }
+    if (!Number.isInteger(parsedPrice) || parsedPrice < 0) {
+      setNotice(null);
+      setError('Price must be a whole baht amount.');
+      return;
+    }
     setSavingItem(true);
     setNotice(null);
     setError(null);
@@ -615,7 +629,7 @@ export function MenuScreen({
         <Pressable
           style={[styles.button, (!itemReady || savingItem) && styles.buttonOff]}
           onPress={() => void saveItem()}
-          disabled={!itemReady || savingItem}
+          disabled={savingItem}
           testID="menu-add-item"
         >
           {savingItem ? (
