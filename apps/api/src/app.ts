@@ -2,7 +2,14 @@ import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import { IllegalTransitionError, PaymentRequiredError } from '@khaidee/domain';
-import Fastify, { type FastifyInstance } from 'fastify';
+import { sql as drizzleSql } from 'drizzle-orm';
+import Fastify, {
+  LogController,
+  type FastifyInstance,
+  type FastifyServerOptions,
+  type FastifyRequest,
+  type FastifyReply,
+} from 'fastify';
 import { ZodError } from 'zod';
 import type { Db } from './db/client.js';
 import {
@@ -11,13 +18,24 @@ import {
   configuredAssistant,
 } from './lib/assistant.js';
 import { EventBroker } from './lib/broker.js';
+import {
+  type ErrorReporter,
+  noopErrorReporter,
+} from './lib/errorReporter.js';
 import { HttpError } from './lib/errors.js';
 import { MAX_UPLOAD_BYTES, UPLOAD_DIR } from './lib/images.js';
+import {
+  createRequestId,
+  installRequestLogging,
+  markResponseErrorCode,
+  requestContextForLog,
+} from './lib/logging.js';
 import {
   configuredNarrator,
   type Narrator,
   narratorConfigured,
 } from './lib/narrator.js';
+import { installEdgeRateLimit, type EdgeRateLimitOptions } from './lib/rateLimit.js';
 import { registerRoutes } from './routes/register.js';
 import { storefrontRoutes } from './routes/storefront.js';
 import { vendorRoutes } from './routes/vendor.js';
@@ -31,7 +49,9 @@ import { VendorService } from './services/vendors.js';
 
 export interface BuildOptions {
   db: Db;
-  logger?: boolean;
+  logger?: FastifyServerOptions['logger'];
+  errorReporter?: ErrorReporter;
+  rateLimit?: EdgeRateLimitOptions | false;
   /**
    * Injected in tests so the suite never reaches the network. In production
    * this is left out and built from the configured AI provider, if enabled.
@@ -45,12 +65,21 @@ export interface BuildOptions {
 export function buildApp({
   db,
   logger = false,
+  errorReporter = noopErrorReporter,
+  rateLimit,
   narrator,
   assistant,
   weatherClient,
 }: BuildOptions): FastifyInstance {
-  const app = Fastify({ logger });
-  const broker = new EventBroker();
+  const app = Fastify({
+    logger,
+    logController: new LogController({ disableRequestLogging: true }),
+    genReqId: createRequestId,
+  });
+  installRequestLogging(app);
+  if (rateLimit !== false) installEdgeRateLimit(app, rateLimit);
+
+  const broker = new EventBroker({ logger: app.log });
   const menuService = new MenuService(db);
   const orderService = new OrderService(db, broker, menuService);
   const pushService = new PushService(db);
@@ -92,6 +121,15 @@ export function buildApp({
   });
 
   app.get('/health', async () => ({ ok: true }));
+  app.get('/ready', async (_request, reply) => {
+    try {
+      await db.execute(drizzleSql`select 1`);
+      return { ok: true, database: 'ok' };
+    } catch (error) {
+      reply.code(503);
+      return { ok: false, database: 'error' };
+    }
+  });
 
   storefrontRoutes(app, orderService, menuService, broker, pushService);
   vendorRoutes(
@@ -111,15 +149,27 @@ export function buildApp({
    * One place where domain errors become status codes. Handlers throw and say
    * nothing about HTTP; this decides what the wire sees.
    */
+  const sendError = (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    status: number,
+    payload: { code: string; message: string; details?: unknown },
+  ) => {
+    markResponseErrorCode(request, payload.code);
+    return reply.code(status).send(payload);
+  };
+
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof HttpError) {
-      return reply
-        .code(error.status)
-        .send({ code: error.code, message: error.message, details: error.details });
+      return sendError(request, reply, error.status, {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+      });
     }
 
     if (error instanceof IllegalTransitionError) {
-      return reply.code(409).send({
+      return sendError(request, reply, 409, {
         code: 'illegal_transition',
         message: error.message,
         details: { from: error.from, to: error.to },
@@ -127,13 +177,14 @@ export function buildApp({
     }
 
     if (error instanceof PaymentRequiredError) {
-      return reply
-        .code(422)
-        .send({ code: 'payment_required', message: error.message });
+      return sendError(request, reply, 422, {
+        code: 'payment_required',
+        message: error.message,
+      });
     }
 
     if (error instanceof ZodError) {
-      return reply.code(400).send({
+      return sendError(request, reply, 400, {
         code: 'invalid_request',
         message: 'That request did not look right',
         details: error.issues,
@@ -142,7 +193,7 @@ export function buildApp({
 
     // Multipart rejects an oversized upload before any handler sees it.
     if ((error as { code?: string }).code === 'FST_REQ_FILE_TOO_LARGE') {
-      return reply.code(413).send({
+      return sendError(request, reply, 413, {
         code: 'image_too_large',
         message: 'That picture is too big. Try taking it again.',
       });
@@ -157,12 +208,21 @@ export function buildApp({
      */
     const tagged = (error as { statusCode?: number }).statusCode;
     if (typeof tagged === 'number' && tagged >= 400 && tagged < 500) {
-      return reply.code(tagged).send({
+      return sendError(request, reply, tagged, {
         code: (error as { code?: string }).code ?? 'bad_request',
         message: (error as { message?: string }).message ?? 'That request did not look right',
       });
     }
 
+    markResponseErrorCode(request, 'internal_error');
+    try {
+      errorReporter.capture(error, {
+        ...requestContextForLog(request, 500, 'internal_error'),
+        statusCode: 500,
+      });
+    } catch (reportError) {
+      request.log.warn({ err: reportError }, 'error reporter failed');
+    }
     request.log.error({ err: error }, 'unhandled error');
     return reply
       .code(500)

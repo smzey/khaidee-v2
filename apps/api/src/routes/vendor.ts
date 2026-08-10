@@ -12,7 +12,13 @@ import {
 } from '@khaidee/domain';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import QRCode from 'qrcode';
-import { bearer, issueToken, readToken, verifyPin } from '../lib/auth.js';
+import {
+  bearer,
+  issueToken,
+  readToken,
+  tokenMatchesPin,
+  verifyPin,
+} from '../lib/auth.js';
 import type { EventBroker } from '../lib/broker.js';
 import { requireFeature, tierSummary } from '../lib/entitlements.js';
 import { HttpError, notFound, unauthorized } from '../lib/errors.js';
@@ -37,6 +43,40 @@ import {
   stallUpdateSchema,
 } from './vendorSchemas.js';
 
+const SIGN_IN_WINDOW_MS = 5 * 60 * 1000;
+const MAX_FAILED_SIGN_INS = 8;
+
+const failedSignIns = new Map<string, { count: number; resetAt: number }>();
+
+function signInKey(request: FastifyRequest, slug: string): string {
+  return `${request.ip}:${slug.trim().toLowerCase()}`;
+}
+
+function assertSignInAllowed(key: string, now = Date.now()): void {
+  const found = failedSignIns.get(key);
+  if (!found) return;
+  if (found.resetAt <= now) {
+    failedSignIns.delete(key);
+    return;
+  }
+  if (found.count >= MAX_FAILED_SIGN_INS) {
+    throw new HttpError(429, 'too_many_sign_in_attempts', 'Try again in a few minutes');
+  }
+}
+
+function recordFailedSignIn(key: string, now = Date.now()): void {
+  const found = failedSignIns.get(key);
+  if (!found || found.resetAt <= now) {
+    failedSignIns.set(key, { count: 1, resetAt: now + SIGN_IN_WINDOW_MS });
+    return;
+  }
+  failedSignIns.set(key, { ...found, count: found.count + 1 });
+}
+
+function clearFailedSignIns(key: string): void {
+  failedSignIns.delete(key);
+}
+
 /**
  * The vendor side: the order queue, the transitions, and tapping in walk-ups.
  * A PIN per stall is the sign-in for this build; the token is signed, so
@@ -53,8 +93,29 @@ export function vendorRoutes(
   forecastService: ForecastService,
   assistantService: AssistantService,
 ): void {
-  const vendorIdFrom = (request: FastifyRequest): string =>
-    readToken(bearer(request.headers.authorization));
+  type AuthVendor = Awaited<ReturnType<OrderService['vendorById']>>;
+
+  const vendorFrom = async (request: FastifyRequest): Promise<AuthVendor> => {
+    const token = readToken(bearer(request.headers.authorization));
+    const vendor = await orderService.vendorById(token.vendorId);
+    if (!tokenMatchesPin(token.pinVersion, vendor.pinHash)) throw unauthorized();
+    return vendor;
+  };
+
+  const vendorIdFrom = async (request: FastifyRequest): Promise<string> =>
+    (await vendorFrom(request)).id;
+
+  const sessionPayload = (vendor: AuthVendor) => ({
+    vendor: {
+      id: vendor.id,
+      slug: vendor.slug,
+      name: vendor.name,
+      promptpayId: vendor.promptpayId,
+      isOpen: vendor.isOpen,
+      tier: vendor.tier,
+    },
+    plan: tierSummary(vendor.tier),
+  });
 
   /** Keeps report-range gating in one place if plan rules change later. */
   const gateRange = (
@@ -68,34 +129,32 @@ export function vendorRoutes(
 
   app.post('/vendor/session', async (request) => {
     const body = vendorSessionSchema.parse(request.body);
-    const vendor = await orderService
-      .vendorBySlug(body.slug)
-      .catch(() => orderService.vendorByName(body.slug))
-      .catch(() => null);
+    const key = signInKey(request, body.slug);
+    assertSignInAllowed(key);
+
+    const vendor = await orderService.vendorBySlug(body.slug).catch(() => null);
     // Same answer whether the slug or the PIN was wrong, so this cannot be
     // used to find out which stalls exist.
-    if (!vendor || !verifyPin(body.pin, vendor.pinHash)) throw unauthorized();
+    if (!vendor || !verifyPin(body.pin, vendor.pinHash)) {
+      recordFailedSignIn(key);
+      throw unauthorized();
+    }
+    clearFailedSignIns(key);
 
     return {
-      token: issueToken(vendor.id),
-      vendor: {
-        id: vendor.id,
-        slug: vendor.slug,
-        name: vendor.name,
-        promptpayId: vendor.promptpayId,
-        isOpen: vendor.isOpen,
-        tier: vendor.tier,
-      },
-      plan: tierSummary(vendor.tier),
+      token: issueToken(vendor.id, vendor.pinHash),
+      ...sessionPayload(vendor),
     };
   });
+
+  app.get('/vendor/session', async (request) => sessionPayload(await vendorFrom(request)));
 
   /**
    * The plans screen, served rather than hardcoded in the app, so a price
    * change does not need an app-store release to reach a vendor's phone.
    */
   app.get('/vendor/plans', async (request) => {
-    const vendor = await orderService.vendorById(vendorIdFrom(request));
+    const vendor = await vendorFrom(request);
     return {
       current: vendor.tier,
       plans: TIER_ORDER.map((tier) => PLANS[tier]),
@@ -106,7 +165,7 @@ export function vendorRoutes(
   app.patch('/vendor/stall', async (request) => {
     const body = stallUpdateSchema.parse(request.body);
     return vendorService.updateStall({
-      vendorId: vendorIdFrom(request),
+      vendorId: await vendorIdFrom(request),
       ...body,
     });
   });
@@ -114,20 +173,20 @@ export function vendorRoutes(
   app.post('/vendor/push-token', async (request) => {
     const body = pushTokenSchema.parse(request.body);
     return pushService.register({
-      vendorId: vendorIdFrom(request),
+      vendorId: await vendorIdFrom(request),
       token: body.token,
       platform: body.platform ?? null,
     });
   });
 
   app.get('/vendor/forecast/tomorrow', async (request) => {
-    const vendor = await orderService.vendorById(vendorIdFrom(request));
+    const vendor = await vendorFrom(request);
     requireFeature(vendor.tier, 'next_day_prep');
     return forecastService.tomorrow(vendor);
   });
 
   app.post('/vendor/promptpay-qr', async (request) => {
-    const vendor = await orderService.vendorById(vendorIdFrom(request));
+    const vendor = await vendorFrom(request);
     const body = promptpayQrSchema.parse(request.body);
 
     if (!vendor.promptpayId) {
@@ -164,17 +223,28 @@ export function vendorRoutes(
 
   /** Cold start and full resync. */
   app.get('/vendor/orders', async (request) => {
-    const vendorId = vendorIdFrom(request);
-    const vendor = await orderService.vendorById(vendorId);
+    const vendor = await vendorFrom(request);
+    const vendorId = vendor.id;
     return orderService.today(vendorId, vendor.timeZone);
   });
 
+  app.get('/vendor/history', async (request) => {
+    const vendor = await vendorFrom(request);
+    const query = reportRangeSchema.parse(request.query ?? {});
+    const range = reportService.resolveRange(vendor, query);
+    return {
+      vendor: { id: vendor.id, name: vendor.name, timeZone: vendor.timeZone },
+      range,
+      orders: await orderService.history(vendor, range),
+    };
+  });
+
   app.get('/vendor/menu', async (request) =>
-    menuService.menuFor(vendorIdFrom(request)),
+    menuService.menuFor(await vendorIdFrom(request)),
   );
 
   app.get('/vendor/stream', async (request, reply) => {
-    const vendorId = vendorIdFrom(request);
+    const vendorId = await vendorIdFrom(request);
     const since = lastEventId(request);
 
     const stream = sseHandler(request, reply);
@@ -191,7 +261,7 @@ export function vendorRoutes(
     '/vendor/orders/:id/accept',
     async (request) =>
       orderService.advance({
-        vendorId: vendorIdFrom(request),
+        vendorId: await vendorIdFrom(request),
         orderId: request.params.id,
         to: 'accepted',
       }),
@@ -201,7 +271,7 @@ export function vendorRoutes(
     '/vendor/orders/:id/ready',
     async (request) =>
       orderService.advance({
-        vendorId: vendorIdFrom(request),
+        vendorId: await vendorIdFrom(request),
         orderId: request.params.id,
         to: 'ready',
       }),
@@ -212,7 +282,7 @@ export function vendorRoutes(
     async (request) => {
       const body = completeOrderSchema.parse(request.body);
       return orderService.advance({
-        vendorId: vendorIdFrom(request),
+        vendorId: await vendorIdFrom(request),
         orderId: request.params.id,
         to: 'completed',
         paymentMethod: body.paymentMethod,
@@ -224,7 +294,7 @@ export function vendorRoutes(
     '/vendor/orders/:id/cancel',
     async (request) =>
       orderService.advance({
-        vendorId: vendorIdFrom(request),
+        vendorId: await vendorIdFrom(request),
         orderId: request.params.id,
         to: 'cancelled',
       }),
@@ -232,9 +302,9 @@ export function vendorRoutes(
 
   /** A walk-up. The vendor taps the items, then moves it through the queue. */
   app.post('/vendor/orders', async (request, reply) => {
-    const vendorId = vendorIdFrom(request);
+    const vendor = await vendorFrom(request);
+    const vendorId = vendor.id;
     const body = ringUpSchema.parse(request.body);
-    const vendor = await orderService.vendorById(vendorId);
 
     const { order, created } = await orderService.place({
       vendor,
@@ -252,7 +322,7 @@ export function vendorRoutes(
   app.post<{ Params: { id: string }; Body: { isAvailable?: boolean } }>(
     '/vendor/menu/:id/availability',
     async (request) => {
-      const vendorId = vendorIdFrom(request);
+      const vendorId = await vendorIdFrom(request);
       const isAvailable = request.body?.isAvailable !== false;
       const updated = await vendorService.setItemAvailability(
         vendorId,
@@ -269,7 +339,7 @@ export function vendorRoutes(
     async (request) => {
       const body = menuItemUpdateSchema.parse(request.body);
       return vendorService.updateMenuItem({
-        vendorId: vendorIdFrom(request),
+        vendorId: await vendorIdFrom(request),
         menuItemId: request.params.id,
         ...body,
       });
@@ -279,11 +349,11 @@ export function vendorRoutes(
   app.delete<{ Params: { id: string } }>(
     '/vendor/menu/:id',
     async (request) =>
-      vendorService.archiveMenuItem(vendorIdFrom(request), request.params.id),
+      vendorService.archiveMenuItem(await vendorIdFrom(request), request.params.id),
   );
 
   app.get('/vendor/categories', async (request) =>
-    menuService.categoriesFor(vendorIdFrom(request)),
+    menuService.categoriesFor(await vendorIdFrom(request)),
   );
 
   app.post<{ Body: { nameTh: string; nameEn: string; sortOrder?: number } }>(
@@ -292,7 +362,7 @@ export function vendorRoutes(
       const body = categoryInputSchema.parse(request.body);
       reply.code(201);
       return vendorService.addCategory({
-        vendorId: vendorIdFrom(request),
+        vendorId: await vendorIdFrom(request),
         ...body,
       });
     },
@@ -303,7 +373,7 @@ export function vendorRoutes(
     async (request) => {
       const body = categoryUpdateSchema.parse(request.body);
       return vendorService.updateCategory({
-        vendorId: vendorIdFrom(request),
+        vendorId: await vendorIdFrom(request),
         categoryId: request.params.id,
         ...body,
       });
@@ -313,14 +383,14 @@ export function vendorRoutes(
   app.delete<{ Params: { id: string } }>(
     '/vendor/categories/:id',
     async (request) =>
-      vendorService.deleteCategory(vendorIdFrom(request), request.params.id),
+      vendorService.deleteCategory(await vendorIdFrom(request), request.params.id),
   );
 
   app.post('/vendor/menu', async (request, reply) => {
     const body = menuItemInputSchema.parse(request.body);
     reply.code(201);
     return vendorService.addMenuItem({
-      vendorId: vendorIdFrom(request),
+      vendorId: await vendorIdFrom(request),
       ...body,
     });
   });
@@ -332,7 +402,7 @@ export function vendorRoutes(
       const body = optionGroupInputSchema.parse(request.body);
       reply.code(201);
       return vendorService.addOptionGroup({
-        vendorId: vendorIdFrom(request),
+        vendorId: await vendorIdFrom(request),
         menuItemId: request.params.id,
         ...body,
       });
@@ -347,7 +417,7 @@ export function vendorRoutes(
   app.post<{ Params: { id: string } }>(
     '/vendor/menu/:id/image',
     async (request) => {
-      const vendorId = vendorIdFrom(request);
+      const vendorId = await vendorIdFrom(request);
       const file = await request.file();
       if (!file) {
         throw new HttpError(400, 'no_file', 'Attach a picture to upload');
@@ -368,7 +438,7 @@ export function vendorRoutes(
     '/vendor/menu/:id/image',
     async (request) => {
       const updated = await vendorService.setImage(
-        vendorIdFrom(request),
+        await vendorIdFrom(request),
         request.params.id,
         null,
       );
@@ -382,7 +452,7 @@ export function vendorRoutes(
    * on top of exactly this object.
    */
   app.get('/vendor/report', async (request) => {
-    const vendor = await orderService.vendorById(vendorIdFrom(request));
+    const vendor = await vendorFrom(request);
     const query = reportRangeSchema.parse(request.query ?? {});
     const range = reportService.resolveRange(vendor, query);
     gateRange(vendor, range);
@@ -396,7 +466,7 @@ export function vendorRoutes(
    * proxies and prefetchers treat as safe to repeat is the wrong one for that.
    */
   app.post('/vendor/report/brief', async (request) => {
-    const vendor = await orderService.vendorById(vendorIdFrom(request));
+    const vendor = await vendorFrom(request);
     const body = reportRangeSchema.parse(request.body ?? {});
     const range = reportService.resolveRange(vendor, body);
     gateRange(vendor, range);
@@ -411,7 +481,7 @@ export function vendorRoutes(
    * and nothing to expire.
    */
   app.post('/vendor/assistant', async (request) => {
-    const vendor = await orderService.vendorById(vendorIdFrom(request));
+    const vendor = await vendorFrom(request);
     requireFeature(vendor.tier, 'assistant');
     const body = assistantAskSchema.parse(request.body ?? {});
     return assistantService.ask({
@@ -423,7 +493,7 @@ export function vendorRoutes(
 
   /** Open or shut the stall to new customer orders. */
   app.post<{ Body: { isOpen?: boolean } }>('/vendor/open', async (request) => {
-    const vendorId = vendorIdFrom(request);
+    const vendorId = await vendorIdFrom(request);
     return orderService.setOpen(vendorId, request.body?.isOpen !== false);
   });
 }

@@ -8,13 +8,14 @@ import {
   addEntry,
   businessDate,
   cartToLines,
+  daysInRange,
   emptyCart,
   promptPayPayload,
   sumLines,
   transition,
   unfillable,
 } from '@khaidee/domain';
-import { and, asc, desc, eq, gt, ilike, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, lte, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import {
   orderEvents,
@@ -31,6 +32,8 @@ type VendorRow = typeof vendors.$inferSelect;
 
 const iso = (value: Date | null): string | null =>
   value === null ? null : value.toISOString();
+
+const MAX_HISTORY_DAYS = 92;
 
 export interface CartLineInput {
   itemId: string;
@@ -50,17 +53,6 @@ export class OrderService {
       .select()
       .from(vendors)
       .where(eq(vendors.slug, slug))
-      .limit(1);
-    if (!vendor) throw notFound('Stall');
-    return vendor;
-  }
-
-  async vendorByName(name: string): Promise<VendorRow> {
-    const [vendor] = await this.db
-      .select()
-      .from(vendors)
-      .where(ilike(vendors.name, name))
-      .orderBy(desc(vendors.createdAt))
       .limit(1);
     if (!vendor) throw notFound('Stall');
     return vendor;
@@ -439,6 +431,101 @@ export class OrderService {
       .where(and(eq(orders.vendorId, vendorId), eq(orders.businessDate, day)))
       .orderBy(desc(orders.queueNo));
     return Promise.all(rows.map((row) => this.byId(row.id)));
+  }
+
+  /**
+   * Finished orders for the vendor archive, assembled in three queries so a
+   * month of history does not pay the queue screen's per-order read cost.
+   */
+  async history(
+    vendor: VendorRow,
+    range: { from: string; to: string },
+  ): Promise<OrderDto[]> {
+    if (daysInRange(range.from, range.to) > MAX_HISTORY_DAYS) {
+      throw new HttpError(
+        400,
+        'range_too_long',
+        `History covers up to ${MAX_HISTORY_DAYS} days at a time`,
+      );
+    }
+
+    const orderRows = await this.db
+      .select()
+      .from(orders)
+      .where(
+        and(
+          eq(orders.vendorId, vendor.id),
+          gte(orders.businessDate, range.from),
+          lte(orders.businessDate, range.to),
+          inArray(orders.status, ['completed', 'cancelled']),
+        ),
+      )
+      .orderBy(desc(orders.placedAt));
+
+    if (orderRows.length === 0) return [];
+
+    const orderIds = orderRows.map((row) => row.id);
+
+    const lineRows = await this.db
+      .select()
+      .from(orderLines)
+      .where(inArray(orderLines.orderId, orderIds))
+      .orderBy(asc(orderLines.sortOrder));
+
+    const optionRows =
+      lineRows.length === 0
+        ? []
+        : await this.db
+            .select()
+            .from(orderLineOptions)
+            .where(
+              inArray(
+                orderLineOptions.orderLineId,
+                lineRows.map((line) => line.id),
+              ),
+            )
+            .orderBy(asc(orderLineOptions.sortOrder));
+
+    const optionsByLine = new Map<string, OrderLine['options']>();
+    for (const option of optionRows) {
+      const list = optionsByLine.get(option.orderLineId) ?? [];
+      list.push({
+        optionId: option.optionId,
+        nameSnapshot: option.nameSnapshot,
+        priceDelta: option.priceDelta,
+      });
+      optionsByLine.set(option.orderLineId, list);
+    }
+
+    const linesByOrder = new Map<string, OrderLine[]>();
+    for (const line of lineRows) {
+      const list = linesByOrder.get(line.orderId) ?? [];
+      list.push({
+        menuItemId: line.menuItemId,
+        qty: line.qty,
+        unitPrice: line.unitPrice,
+        nameSnapshot: line.nameSnapshot,
+        options: optionsByLine.get(line.id) ?? [],
+      });
+      linesByOrder.set(line.orderId, list);
+    }
+
+    return orderRows.map((row) => ({
+      id: row.id,
+      vendorId: row.vendorId,
+      vendorName: vendor.name,
+      businessDate: row.businessDate,
+      queueNo: row.queueNo,
+      status: row.status,
+      source: row.source,
+      total: row.total,
+      paymentMethod: row.paymentMethod,
+      lines: linesByOrder.get(row.id) ?? [],
+      placedAt: row.placedAt.toISOString(),
+      acceptedAt: iso(row.acceptedAt),
+      readyAt: iso(row.readyAt),
+      completedAt: iso(row.completedAt),
+    }));
   }
 
   /** Everything a reconnecting vendor missed, in order. */

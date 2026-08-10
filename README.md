@@ -373,7 +373,15 @@ Left in v1 for now: the yield gap and the PDF export.
 ## Known limits
 
 - Vendor sign-in is a per-stall PIN, not accounts. The token is HMAC-signed and
-  stateless; `SESSION_SECRET` must be set before this is deployed anywhere.
+  stateless; production startup now refuses to run without `SESSION_SECRET` and
+  `DATABASE_URL`.
+- `/health` is process liveness only. Use `/ready` for uptime checks that must
+  prove Postgres is reachable.
+- Request logging is structured and redacts bearer tokens, PINs, PromptPay IDs
+  and AI prompt/thread fields. Set `SENTRY_DSN` to report unexpected 500s.
+- Backups are operationally required because schema is managed by
+  `drizzle-kit push`, not migration files. See
+  `docs/runbooks/postgres-backup-restore.md`.
 - The seed is one stall and a real menu — deliberately no generated history.
 - `apps/vendor` has only ever run in a browser via react-native-web. It has
   never been opened on a real iOS or Android handset.

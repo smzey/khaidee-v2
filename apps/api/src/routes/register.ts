@@ -3,8 +3,9 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { networkInterfaces } from 'node:os';
 import QRCode from 'qrcode';
 import sharp from 'sharp';
-import { bearer, issueToken, readToken } from '../lib/auth.js';
+import { bearer, issueToken, readToken, tokenMatchesPin } from '../lib/auth.js';
 import { tierSummary } from '../lib/entitlements.js';
+import { unauthorized } from '../lib/errors.js';
 import type { OrderService } from '../services/orders.js';
 import type { VendorService } from '../services/vendors.js';
 
@@ -106,6 +107,13 @@ export function registerRoutes(
   vendorService: VendorService,
   orderService: OrderService,
 ): void {
+  const vendorFrom = async (request: FastifyRequest) => {
+    const token = readToken(bearer(request.headers.authorization));
+    const vendor = await orderService.vendorById(token.vendorId);
+    if (!tokenMatchesPin(token.pinVersion, vendor.pinHash)) throw unauthorized();
+    return vendor;
+  };
+
   /**
    * Claims a stall and signs the vendor straight in — there is no confirmation
    * step to lose someone at, because the next thing they need is their QR.
@@ -116,7 +124,7 @@ export function registerRoutes(
 
     reply.code(201);
     return {
-      token: issueToken(vendor.id),
+      token: issueToken(vendor.id, vendor.pinHash),
       vendor: {
         id: vendor.id,
         slug: vendor.slug,
@@ -138,8 +146,7 @@ export function registerRoutes(
    * twice.
    */
   app.get('/vendor/qr', async (request, reply) => {
-    const vendorId = readToken(bearer(request.headers.authorization));
-    const vendor = await orderService.vendorById(vendorId);
+    const vendor = await vendorFrom(request);
     const url = orderUrlFor(request, vendor.slug, requestedQrMode(request));
 
     const svg = await QRCode.toString(url, {
@@ -153,8 +160,7 @@ export function registerRoutes(
   });
 
   app.get('/vendor/qr/card', async (request) => {
-    const vendorId = readToken(bearer(request.headers.authorization));
-    const vendor = await orderService.vendorById(vendorId);
+    const vendor = await vendorFrom(request);
     const publicCard = await qrCardVariant({
       mode: 'public',
       name: vendor.name,
@@ -184,8 +190,7 @@ export function registerRoutes(
 
   /** The same QR with the stall's name, sized to print on a single sheet. */
   app.get('/vendor/qr/print', async (request, reply) => {
-    const vendorId = readToken(bearer(request.headers.authorization));
-    const vendor = await orderService.vendorById(vendorId);
+    const vendor = await vendorFrom(request);
     const url = orderUrlFor(request, vendor.slug, requestedQrMode(request));
 
     const qr = await QRCode.toString(url, {

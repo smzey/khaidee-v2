@@ -245,6 +245,7 @@ export function RegisterScreen({
               setName(value);
               setSlug(cleanSlug(value));
             }} placeholder="Somchai Noodles" />
+            <Text style={styles.slugPreview}>Stall link: {generatedSlug}</Text>
           </Panel>
         )}
 
@@ -505,6 +506,12 @@ const styles = StyleSheet.create({
     color: theme.ink,
     backgroundColor: theme.white,
     marginBottom: 18,
+  },
+  slugPreview: {
+    marginTop: -8,
+    color: theme.ink,
+    fontSize: 14,
+    fontWeight: '800',
   },
   row: { flexDirection: 'row', alignItems: 'stretch', gap: 10 },
   pills: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 18 },

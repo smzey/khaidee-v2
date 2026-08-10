@@ -131,8 +131,16 @@ async function multipartRequest<T>(
   return payload as T;
 }
 
+export interface VendorSessionResponse {
+  vendor: Stall;
+  plan?: TierPlan;
+}
+
+export const fetchSession = (token: string) =>
+  request<VendorSessionResponse>('/vendor/session', { token });
+
 export const signIn = (slug: string, pin: string) =>
-  request<{ token: string; vendor: Stall }>(
+  request<{ token: string } & VendorSessionResponse>(
     '/vendor/session',
     { method: 'POST', body: JSON.stringify({ slug, pin }) },
   );
@@ -146,6 +154,7 @@ export const registerVendor = (body: {
   request<{
     token: string;
     vendor: Stall;
+    plan?: TierPlan;
     orderUrl: string;
   }>('/vendor/register', { method: 'POST', body: JSON.stringify(body) });
 
@@ -274,6 +283,21 @@ export const deleteMenuItemImage = (token: string, id: string) =>
 
 export const fetchToday = (token: string) =>
   request<OrderDto[]>('/vendor/orders', { token });
+
+export interface VendorHistory {
+  vendor: { id: string; name: string; timeZone: string };
+  range: { from: string; to: string };
+  orders: OrderDto[];
+}
+
+export const fetchHistory = (
+  token: string,
+  range: { from: string; to: string },
+) =>
+  request<VendorHistory>(
+    `/vendor/history?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`,
+    { token },
+  );
 
 export const ringUpOrder = (
   token: string,

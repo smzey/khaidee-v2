@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import type { OrderDto } from '@khaidee/domain';
+import type { LogLike } from './logging.js';
 
 export interface OrderEvent {
   /** Matches order_events.id, so a reconnect can ask for everything after it. */
@@ -20,19 +21,29 @@ export interface OrderEvent {
 export class EventBroker {
   private readonly emitter = new EventEmitter();
 
-  constructor() {
+  constructor(private readonly options: { logger?: Pick<LogLike, 'warn'> } = {}) {
     // One listener per connected vendor screen; the default cap of 10 is a
     // leak warning, not a limit that suits us.
     this.emitter.setMaxListeners(0);
   }
 
   publish(vendorId: string, event: OrderEvent): void {
+    if (event.type === 'order.placed' && this.subscriberCount(vendorId) === 0) {
+      this.options.logger?.warn(
+        { vendorId, eventType: event.type },
+        'vendor has no live SSE subscribers',
+      );
+    }
     this.emitter.emit(vendorId, event);
   }
 
   subscribe(vendorId: string, listener: (event: OrderEvent) => void): () => void {
     this.emitter.on(vendorId, listener);
     return () => this.emitter.off(vendorId, listener);
+  }
+
+  subscriberCount(vendorId: string): number {
+    return this.emitter.listenerCount(vendorId);
   }
 
   /** Customer pages watch a single order rather than a whole stall. */
@@ -47,5 +58,9 @@ export class EventBroker {
     const key = `order:${orderId}`;
     this.emitter.on(key, listener);
     return () => this.emitter.off(key, listener);
+  }
+
+  orderSubscriberCount(orderId: string): number {
+    return this.emitter.listenerCount(`order:${orderId}`);
   }
 }

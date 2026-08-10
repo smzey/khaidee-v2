@@ -614,6 +614,34 @@ describe('vendor auth', () => {
     expect(unknown.statusCode).toBe(401);
   });
 
+  it('does not treat LIKE wildcards as stall names during sign-in', async () => {
+    const res = await h.app.inject({
+      method: 'POST',
+      url: '/vendor/session',
+      payload: { slug: '%', pin: '1234' },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('rate limits repeated failed sign-ins for the same stall key', async () => {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const res = await h.app.inject({
+        method: 'POST',
+        url: '/vendor/session',
+        payload: { slug: 'rate-limit-target', pin: '9999' },
+      });
+      expect(res.statusCode).toBe(401);
+    }
+
+    const locked = await h.app.inject({
+      method: 'POST',
+      url: '/vendor/session',
+      payload: { slug: 'rate-limit-target', pin: '9999' },
+    });
+    expect(locked.statusCode).toBe(429);
+    expect(locked.json().code).toBe('too_many_sign_in_attempts');
+  });
+
   it('rejects a tampered token', async () => {
     const res = await h.app.inject({
       method: 'GET',
@@ -736,6 +764,13 @@ describe('vendor stall settings', () => {
     });
     expect(oldPin.statusCode).toBe(401);
     expect(newPin.statusCode).toBe(200);
+
+    const oldToken = await h.app.inject({
+      method: 'GET',
+      url: '/vendor/orders',
+      headers: auth(h.token),
+    });
+    expect(oldToken.statusCode).toBe(401);
   });
 
   it('rejects malformed PromptPay IDs before payment time', async () => {

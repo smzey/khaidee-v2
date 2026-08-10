@@ -1,4 +1,5 @@
 import { PLANS } from '@khaidee/domain';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useState } from 'react';
 import {
   ActivityIndicator,
@@ -138,7 +139,7 @@ export function LaunchPadScreen({
       <View style={styles.modules}>
         <ModuleShortcut
           label="Orders"
-          icon="#"
+          icon="clipboard-list-outline"
           accent={theme.stool}
           badge={loading ? null : String(openOrders.length)}
           loading={loading}
@@ -147,14 +148,14 @@ export function LaunchPadScreen({
         />
         <ModuleShortcut
           label="Menu"
-          icon="M"
+          icon="silverware-fork-knife"
           accent={theme.chilli}
           onPress={onOpenMenu}
           testID="module-menu"
         />
         <ModuleShortcut
           label="History"
-          icon="H"
+          icon="history"
           accent={theme.yolk}
           darkIcon
           badge={String(historyCount)}
@@ -164,7 +165,7 @@ export function LaunchPadScreen({
         />
         <ModuleShortcut
           label="Prep"
-          icon="F"
+          icon="calendar-clock"
           accent={theme.ink}
           badge={String(forecastOrders)}
           badgeTone="warm"
@@ -173,7 +174,7 @@ export function LaunchPadScreen({
         />
         <ModuleShortcut
           label="Report"
-          icon="R"
+          icon="file-chart-outline"
           accent={theme.stool}
           badge={String(completed)}
           badgeTone="plain"
@@ -182,7 +183,7 @@ export function LaunchPadScreen({
         />
         <ModuleShortcut
           label="Stall"
-          icon="S"
+          icon="storefront-outline"
           accent={theme.stool}
           badge={session.stall.isOpen ? 'ON' : 'OFF'}
           badgeTone={session.stall.isOpen ? 'blue' : 'muted'}
@@ -191,7 +192,7 @@ export function LaunchPadScreen({
         />
         <ModuleShortcut
           label="Plan"
-          icon="฿"
+          icon="currency-thb"
           accent={theme.yolk}
           darkIcon
           badge={PLANS[session.stall.tier].nameEn.toUpperCase()}
@@ -201,7 +202,7 @@ export function LaunchPadScreen({
         />
         <ModuleShortcut
           label="QR"
-          icon="QR"
+          icon="qrcode-scan"
           accent={theme.ink}
           badge="SCAN"
           badgeTone="warm"
@@ -225,7 +226,7 @@ function ModuleShortcut({
   testID,
 }: {
   label: string;
-  icon: string;
+  icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
   accent: string;
   darkIcon?: boolean;
   badge?: string | null;
@@ -252,13 +253,11 @@ function ModuleShortcut({
   return (
     <Pressable style={styles.shortcut} onPress={onPress} testID={testID}>
       <View style={[styles.shortcutIcon, { backgroundColor: accent }]}>
-        <Text
-          style={[styles.shortcutIconText, darkIcon && styles.shortcutIconTextDark]}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-        >
-          {icon}
-        </Text>
+        <MaterialCommunityIcons
+          name={icon}
+          size={38}
+          color={darkIcon ? theme.ink : theme.white}
+        />
         {(loading || badge) && (
           <View style={[styles.shortcutBadge, badgeStyle]}>
             {loading ? (
@@ -376,37 +375,39 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     textTransform: 'uppercase',
     letterSpacing: 1.1,
-    marginBottom: 10,
+    /* The badges hang 8px above their tile, so 10 here read as 2 on screen. */
+    marginBottom: 22,
   },
   modules: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginHorizontal: -8,
-    rowGap: 22,
+    rowGap: 26,
+    /*
+     * Four 25% cells sized for a phone spread to 150px each on the 620px web
+     * body, stranding the icons. Capping the grid keeps the columns close to
+     * their phone spacing on every screen.
+     */
+    maxWidth: 440,
+    alignSelf: 'center',
+    width: '100%',
   },
   shortcut: {
     width: '25%',
-    minHeight: 116,
+    minHeight: 128,
     alignItems: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: 6,
   },
   shortcutIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 14,
+    width: 76,
+    height: 76,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: theme.ink,
-    marginBottom: 8,
+    marginBottom: 12,
   },
-  shortcutIconText: {
-    color: theme.white,
-    fontSize: 27,
-    lineHeight: 31,
-    fontWeight: '900',
-  },
-  shortcutIconTextDark: { color: theme.ink },
   shortcutLabel: {
     minHeight: 36,
     color: theme.ink,

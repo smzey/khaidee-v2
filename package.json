@@ -27,6 +27,7 @@
     "seed:demo": "node scripts/seed-demo.mjs"
   },
   "devDependencies": {
+    "expo-font": "^14.0.12",
     "expo-modules-core": "~3.0.30",
     "react": "19.1.0",
     "react-dom": "19.1.0",

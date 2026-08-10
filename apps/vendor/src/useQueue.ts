@@ -1,6 +1,6 @@
 import { type OrderDto, isOpen } from '@khaidee/domain';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { fetchToday, streamUrl } from './api';
+import { fetchToday, isSignedOut, streamUrl } from './api';
 import { loadLastEventId, saveLastEventId } from './session';
 import { type StreamHandle, openStream } from './sse';
 
@@ -47,6 +47,10 @@ export function newPlacedOrders(
   return fresh;
 }
 
+export function connectionAfterQueueFailure(error: unknown): 'signed-out' | 'offline' {
+  return isSignedOut(error) ? 'signed-out' : 'offline';
+}
+
 /**
  * Today's orders, kept current.
  *
@@ -60,6 +64,7 @@ export function newPlacedOrders(
 export function useQueue(
   token: string | null,
   onNewOrder?: (order: OrderDto) => void,
+  onSignedOut?: () => void,
 ): Queue {
   const [orders, setOrders] = useState<OrderDto[]>([]);
   const [connection, setConnection] = useState<Connection>('connecting');
@@ -88,10 +93,15 @@ export function useQueue(
         onNewOrder?.(order);
       }
       hasHydrated.current = true;
-    } catch {
-      if (alive.current) setConnection('offline');
+    } catch (error) {
+      if (!alive.current) return;
+      if (connectionAfterQueueFailure(error) === 'signed-out') {
+        onSignedOut?.();
+        return;
+      }
+      setConnection('offline');
     }
-  }, [token, onNewOrder]);
+  }, [token, onNewOrder, onSignedOut]);
 
   useEffect(() => {
     alive.current = true;

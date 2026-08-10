@@ -1,5 +1,6 @@
 import type { OrderDto } from '@khaidee/domain';
-import { mergeOrder, newPlacedOrders } from './useQueue';
+import { ApiError } from './api';
+import { connectionAfterQueueFailure, mergeOrder, newPlacedOrders } from './useQueue';
 
 const order = (over: Partial<OrderDto> & { id: string; queueNo: number }): OrderDto => ({
   vendorId: 'v1',
@@ -83,5 +84,19 @@ describe('mergeOrder', () => {
     const before = [order({ id: 'a', queueNo: 1 })];
     mergeOrder(before, order({ id: 'b', queueNo: 2 }));
     expect(before).toHaveLength(1);
+  });
+});
+
+describe('connectionAfterQueueFailure', () => {
+  it('treats auth failures as signed out, not offline', () => {
+    expect(connectionAfterQueueFailure(new ApiError(401, 'unauthorized', 'Sign in'))).toBe(
+      'signed-out',
+    );
+  });
+
+  it('treats transport failures as offline', () => {
+    expect(connectionAfterQueueFailure(new ApiError(0, 'offline', 'No connection'))).toBe(
+      'offline',
+    );
   });
 });

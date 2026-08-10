@@ -10,7 +10,6 @@ import {
   prepareOrderNotifications,
   registerRemoteOrderNotifications,
 } from './notifications';
-import { AssistantBubble } from './components/AssistantBubble';
 import { ForecastingScreen } from './screens/ForecastingScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { LaunchPadScreen } from './screens/LaunchPadScreen';
@@ -22,7 +21,8 @@ import { RegisterScreen } from './screens/RegisterScreen';
 import { ReportScreen } from './screens/ReportScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { StallScreen } from './screens/StallScreen';
-import { type Session, clearSession, loadSession, saveStallIfRemembered } from './session';
+import { restoreRememberedSession } from './authFlow';
+import { type Session, clearSession, saveStallIfRemembered } from './session';
 import { theme } from './theme';
 import { useQueue } from './useQueue';
 
@@ -48,17 +48,26 @@ export default function App() {
   >('home');
   const [remotePushReady, setRemotePushReady] = useState(false);
 
+  const signOut = useCallback(async () => {
+    await clearSession();
+    setModule('home');
+    setSession(null);
+  }, []);
+
   const alertNewOrder = useCallback((order: OrderDto) => {
     if (Platform.OS !== 'web') {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
     if (!remotePushReady) void notifyLocalNewOrder(order);
   }, [remotePushReady]);
-  const queue = useQueue(session?.token ?? null, alertNewOrder);
+  const handleQueueSignedOut = useCallback(() => {
+    void signOut();
+  }, [signOut]);
+  const queue = useQueue(session?.token ?? null, alertNewOrder, handleQueueSignedOut);
 
   useEffect(() => {
     let live = true;
-    void loadSession().then((found) => {
+    void restoreRememberedSession().then((found) => {
       if (!live) return;
       setSession(found);
       setChecked(true);
@@ -107,7 +116,7 @@ export default function App() {
           module === 'orders' ? (
             <QueueScreen session={session} queue={queue} onBack={() => setModule('home')} />
           ) : module === 'history' ? (
-            <HistoryScreen queue={queue} onBack={() => setModule('home')} />
+            <HistoryScreen session={session} queue={queue} onBack={() => setModule('home')} />
           ) : module === 'forecasting' ? (
             <ForecastingScreen
               session={session}
@@ -145,11 +154,7 @@ export default function App() {
               onOpenQr={() => setModule('qr')}
               onOpenStall={() => setModule('stall')}
               onOpenPlans={() => setModule('plans')}
-              onSignOut={async () => {
-                await clearSession();
-                setModule('home');
-                setSession(null);
-              }}
+              onSignOut={signOut}
             />
           )
         ) : authMode === 'register' ? (
@@ -171,18 +176,6 @@ export default function App() {
           />
         )}
 
-        {/*
-          Outside the screen switch on purpose: the assistant follows the
-          vendor everywhere rather than being somewhere they have to navigate
-          to. A question that needs three taps to ask does not get asked.
-        */}
-        {session ? (
-          <AssistantBubble
-            token={session.token}
-            tier={session.stall.tier}
-            onUpgrade={() => setModule('plans')}
-          />
-        ) : null}
       </SafeAreaView>
     </SafeAreaProvider>
   );

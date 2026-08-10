@@ -4,10 +4,42 @@ import type { OrderEvent } from './broker.js';
 
 /** Market wifi drops silently; a comment frame every 25s keeps proxies honest. */
 const HEARTBEAT_MS = 25_000;
+const SHORT_CONNECTION_MS = 5_000;
+
+type SseKind = 'vendor' | 'customer';
+
+interface SseCounters {
+  current: number;
+  opened: number;
+  closed: number;
+  sendFailures: number;
+}
+
+const counters: Record<SseKind, SseCounters> = {
+  vendor: { current: 0, opened: 0, closed: 0, sendFailures: 0 },
+  customer: { current: 0, opened: 0, closed: 0, sendFailures: 0 },
+};
 
 export interface SseStream {
   send(event: OrderEvent): void;
   onClose(cleanup: () => void): void;
+}
+
+export function sseStatsSnapshot(): Record<SseKind, SseCounters> {
+  return {
+    vendor: { ...counters.vendor },
+    customer: { ...counters.customer },
+  };
+}
+
+export function resetSseStatsForTests(): void {
+  counters.vendor = { current: 0, opened: 0, closed: 0, sendFailures: 0 };
+  counters.customer = { current: 0, opened: 0, closed: 0, sendFailures: 0 };
+}
+
+function streamKind(request: FastifyRequest): SseKind {
+  const route = request.routeOptions?.url ?? request.url;
+  return route === '/vendor/stream' ? 'vendor' : 'customer';
 }
 
 /**
@@ -22,6 +54,21 @@ export function sseHandler(
   request: FastifyRequest,
   reply: FastifyReply,
 ): SseStream {
+  const kind = streamKind(request);
+  const openedAt = Date.now();
+  counters[kind].current += 1;
+  counters[kind].opened += 1;
+  request.log.info(
+    {
+      requestId: request.id,
+      kind,
+      route: request.routeOptions?.url ?? request.url,
+      lastEventId: lastEventId(request),
+      stats: sseStatsSnapshot(),
+    },
+    'sse stream opened',
+  );
+
   /*
    * Writing to reply.raw goes around Fastify, which means it also goes around
    * the CORS plugin — the browser then blocks the stream because the response
@@ -54,6 +101,21 @@ export function sseHandler(
     if (closed) return;
     closed = true;
     clearInterval(heartbeat);
+    counters[kind].current = Math.max(0, counters[kind].current - 1);
+    counters[kind].closed += 1;
+    const durationMs = Date.now() - openedAt;
+    const fields = {
+      requestId: request.id,
+      kind,
+      route: request.routeOptions?.url ?? request.url,
+      durationMs,
+      stats: sseStatsSnapshot(),
+    };
+    if (durationMs < SHORT_CONNECTION_MS) {
+      request.log.warn(fields, 'sse stream closed quickly');
+    } else {
+      request.log.info(fields, 'sse stream closed');
+    }
     for (const cleanup of cleanups) cleanup();
   };
 
@@ -63,9 +125,24 @@ export function sseHandler(
   return {
     send(event: OrderEvent) {
       if (closed || reply.raw.writableEnded) return;
-      reply.raw.write(
-        `id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event.order)}\n\n`,
-      );
+      try {
+        reply.raw.write(
+          `id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event.order)}\n\n`,
+        );
+      } catch (error) {
+        counters[kind].sendFailures += 1;
+        request.log.error(
+          {
+            err: error,
+            requestId: request.id,
+            kind,
+            eventId: event.id,
+            eventType: event.type,
+            stats: sseStatsSnapshot(),
+          },
+          'sse send failed',
+        );
+      }
     },
     onClose(cleanup: () => void) {
       if (closed) cleanup();

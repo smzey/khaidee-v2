@@ -23,6 +23,12 @@ const cleanSlug = (value: string) =>
     .replace(/-{2,}/g, '-')
     .slice(0, 40);
 
+const signInSlugFrom = (value: string) => {
+  const trimmed = value.trim();
+  const pathSlug = trimmed.match(/\/s\/([^/?#]+)/)?.[1];
+  return cleanSlug(pathSlug ?? trimmed);
+};
+
 /**
  * Deliberately the smallest screen in the app. A vendor signs in about once a
  * month — the token lasts one — so this exists to be got through, not to be
@@ -45,12 +51,8 @@ export function SignInScreen({
     setBusy(true);
     setError(null);
     try {
-      const typed = slug.trim();
-      const normalized = cleanSlug(typed);
-      const result = await signIn(normalized || typed, pin.trim()).catch((caught) => {
-        if (!normalized || normalized === typed) throw caught;
-        return signIn(typed, pin.trim());
-      });
+      const normalized = signInSlugFrom(slug);
+      const result = await signIn(normalized, pin.trim());
       const session: Session = { token: result.token, stall: result.vendor };
       if (rememberMe) await saveSession(session);
       else await clearSession();
@@ -59,7 +61,7 @@ export function SignInScreen({
       const apiError = caught as ApiError;
       setError(
         apiError.status === 401
-          ? 'That stall name and PIN do not match.'
+          ? 'That stall link and PIN do not match.'
           : apiError.message,
       );
       setBusy(false);
@@ -77,14 +79,14 @@ export function SignInScreen({
         <Text style={styles.mark}>KHAIDEE</Text>
         <Text style={styles.title}>Open your stall</Text>
 
-        <Text style={styles.label}>Stall name</Text>
+        <Text style={styles.label}>Stall link</Text>
         <TextInput
           style={styles.input}
           value={slug}
           onChangeText={setSlug}
           autoCapitalize="none"
           autoCorrect={false}
-          placeholder="Your stall name"
+          placeholder="somchai-noodles"
           placeholderTextColor={theme.muted}
           inputMode="text"
           testID="slug"
